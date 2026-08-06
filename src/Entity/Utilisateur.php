@@ -5,15 +5,10 @@ namespace App\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Serializer\Annotation\Groups;
 
-#[ApiResource(
-    normalizationContext: ['groups' => ['utilisateur:read']],
-    denormalizationContext: ['groups' => ['utilisateur:write']]
-)]
 #[ORM\Entity]
 #[ORM\Table(name: 'utilisateur')]
 class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
@@ -21,16 +16,21 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(name: 'utilisateur_id', type: 'integer')]
-    #[Groups(['utilisateur:read', 'utilisateur:write'])]
+    #[Groups(['utilisateur:read'])]
     private ?int $utilisateurId = null;
 
-    #[ORM\Column(name: 'email', type: 'string', length: 50, nullable: true)]
+    #[ORM\Column(name: 'email', type: 'string', length: 180, unique: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $email = null;
 
-    #[ORM\Column(name: 'password', type: 'string', length: 50, nullable: true)]
-    #[Groups(['utilisateur:write'])]
+    // Modifié à 255 caractères pour stocker le hash Symfony
+    #[ORM\Column(name: 'password', type: 'string', length: 255)]
+    #[Groups(['utilisateur:write'])] // Jamais lu dans utilisateur:read !
     private ?string $password = null;
+
+    #[ORM\Column(name: 'api_token', type: 'string', length: 255, unique: true, nullable: true)]
+    #[Groups(['utilisateur:read'])]
+    private ?string $apiToken = null;
 
     #[ORM\Column(name: 'prenom', type: 'string', length: 50, nullable: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
@@ -86,7 +86,7 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->email;
     }
 
-    public function setEmail(?string $email): self
+    public function setEmail(string $email): self
     {
         $this->email = $email;
         return $this;
@@ -97,9 +97,20 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->password;
     }
 
-    public function setPassword(?string $password): self
+    public function setPassword(string $password): self
     {
         $this->password = $password;
+        return $this;
+    }
+
+    public function getApiToken(): ?string
+    {
+        return $this->apiToken;
+    }
+
+    public function setApiToken(?string $apiToken): self
+    {
+        $this->apiToken = $apiToken;
         return $this;
     }
 
@@ -201,22 +212,30 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return (string) $this->email;
     }
 
+    /**
+     * Retourne la liste des rôles de l'utilisateur sous forme de tableau de chaînes.
+     * Garantit que ROLE_USER est toujours inclus et que les libellés sont au bon format.
+     */
     public function getRoles(): array
     {
-        $roleArray = [];
+        $roles = [];
         foreach ($this->roleEntities as $role) {
-            $libelle = $role->getLibelle();
-            if ($libelle !== null) {
-                $roleArray[] = $libelle;
+            $libelle = strtoupper((string) $role->getLibelle());
+            // Ajoute 'ROLE_' si ce n'est pas déjà présent dans votre table Role
+            if (!str_starts_with($libelle, 'ROLE_')) {
+                $libelle = 'ROLE_' . $libelle;
             }
+            $roles[] = $libelle;
         }
-        if (empty($roleArray)) {
-            $roleArray[] = 'ROLE_USER';
-        }
-        return $roleArray;
+
+        // Tout utilisateur a au moins ROLE_USER
+        $roles[] = 'ROLE_USER';
+
+        return array_unique($roles);
     }
 
     public function eraseCredentials(): void
     {
+        // Si vous stockez des données temporaires sensibles, effacez-les ici
     }
 }
