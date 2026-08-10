@@ -26,7 +26,7 @@ class SecurityController extends AbstractController
         if (in_array('ROLE_ADMIN', $roles, true)) {
             return 'admin';
         }
-        
+
         if (in_array('ROLE_EMPLOYE', $roles, true) || in_array('ROLE_EMPLOYEE', $roles, true)) {
             return 'employe';
         }
@@ -52,7 +52,7 @@ class SecurityController extends AbstractController
                     new OA\Property(property: 'prenom', type: 'string', example: 'Jean'),
                     new OA\Property(property: 'telephone', type: 'string', example: '0612345678'),
                     new OA\Property(property: 'ville', type: 'string', example: 'Bordeaux'),
-                    new OA\Property(property: 'pays', type: 'string', example: 'France'),
+                    new OA\Property(property: 'codePostal', type: 'string', example: '33000'),
                     new OA\Property(property: 'adressePostale', type: 'string', example: '10 rue de la Paix')
                 ]
             )
@@ -95,7 +95,7 @@ class SecurityController extends AbstractController
         if (isset($data['prenom'])) $user->setPrenom($data['prenom']);
         if (isset($data['telephone'])) $user->setTelephone($data['telephone']);
         if (isset($data['ville'])) $user->setVille($data['ville']);
-        if (isset($data['pays'])) $user->setPays($data['pays']);
+        if (isset($data['codePostal'])) $user->setCodePostal($data['codePostal']);
         if (isset($data['adressePostale'])) $user->setAdressePostale($data['adressePostale']);
 
         $em->persist($user);
@@ -169,7 +169,7 @@ class SecurityController extends AbstractController
             'email' => $user->getEmail(),
             'nom' => $user->getNom(),
             'prenom' => $user->getPrenom(),
-            'role' => $this->determineMainRole($user), // 👈 Renvoie 'admin', 'employe' ou 'client'
+            'role' => $this->determineMainRole($user),
             'roles' => $user->getRoles()
         ]);
     }
@@ -203,10 +203,10 @@ class SecurityController extends AbstractController
             'prenom' => $user->getPrenom(),
             'telephone' => $user->getTelephone(),
             'ville' => $user->getVille(),
-            'pays' => $user->getPays(),
+            'codePostal' => $user->getCodePostal(),
             'adressePostale' => $user->getAdressePostale(),
             'isActive' => $user->isIsActive(),
-            'role' => $this->determineMainRole($user), // 👈 Renvoie 'admin', 'employe' ou 'client'
+            'role' => $this->determineMainRole($user),
             'roles' => $user->getRoles()
         ]);
     }
@@ -214,10 +214,10 @@ class SecurityController extends AbstractController
     /**
      * Modifier les informations du compte de l'utilisateur connecté
      */
-    #[Route('/account/edit', name: 'edit_profile', methods: ['PUT', 'PATCH'])]
+    #[Route('/account/edit', name: 'edit_profile', methods: ['PUT', 'PATCH', 'POST'])]
     #[OA\Put(
         path: '/api/account/edit',
-        summary: 'Modifier les informations du compte de l\'utilisateur connecté',
+        summary: 'Modifier les informations du compte (PUT)',
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(
                 properties: [
@@ -227,7 +227,7 @@ class SecurityController extends AbstractController
                     new OA\Property(property: 'prenom', type: 'string', example: 'JeanModifie'),
                     new OA\Property(property: 'telephone', type: 'string', example: '0698765432'),
                     new OA\Property(property: 'ville', type: 'string', example: 'Lyon'),
-                    new OA\Property(property: 'pays', type: 'string', example: 'France'),
+                    new OA\Property(property: 'codePostal', type: 'string', example: '33000'),
                     new OA\Property(property: 'adressePostale', type: 'string', example: '5 rue de la République')
                 ]
             )
@@ -236,6 +236,21 @@ class SecurityController extends AbstractController
             new OA\Response(response: 200, description: 'Profil mis à jour avec succès'),
             new OA\Response(response: 401, description: 'Utilisateur non authentifié'),
             new OA\Response(response: 409, description: 'Cet email est déjà utilisé')
+        ]
+    )]
+    #[OA\Post(
+        path: '/api/account/edit',
+        summary: 'Modifier les informations du compte (POST)',
+        requestBody: new OA\RequestBody(
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'password', type: 'string', example: 'NouveauMotDePasse123!')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Profil mis à jour avec succès'),
+            new OA\Response(response: 401, description: 'Utilisateur non authentifié')
         ]
     )]
     #[OA\Security(name: 'X-AUTH-TOKEN')]
@@ -272,7 +287,7 @@ class SecurityController extends AbstractController
         if (array_key_exists('prenom', $data)) $user->setPrenom($data['prenom']);
         if (array_key_exists('telephone', $data)) $user->setTelephone($data['telephone']);
         if (array_key_exists('ville', $data)) $user->setVille($data['ville']);
-        if (array_key_exists('pays', $data)) $user->setPays($data['pays']);
+        if (array_key_exists('codePostal', $data)) $user->setCodePostal($data['codePostal']);
         if (array_key_exists('adressePostale', $data)) $user->setAdressePostale($data['adressePostale']);
 
         $em->flush();
@@ -286,9 +301,39 @@ class SecurityController extends AbstractController
                 'prenom' => $user->getPrenom(),
                 'telephone' => $user->getTelephone(),
                 'ville' => $user->getVille(),
-                'pays' => $user->getPays(),
+                'codePostal' => $user->getCodePostal(),
                 'adressePostale' => $user->getAdressePostale()
             ]
         ]);
+    }
+
+    /**
+     * Supprimer le compte de l'utilisateur connecté
+     */
+    #[Route('/account/delete', name: 'delete_account', methods: ['DELETE'])]
+    #[OA\Delete(
+        path: '/api/account/delete',
+        summary: 'Supprimer le compte de l\'utilisateur connecté',
+        responses: [
+            new OA\Response(response: 200, description: 'Compte supprimé avec succès'),
+            new OA\Response(response: 401, description: 'Utilisateur non authentifié')
+        ]
+    )]
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
+    public function deleteAccount(EntityManagerInterface $em): JsonResponse
+    {
+        /** @var Utilisateur|null $user */
+        $user = $this->getUser();
+
+        if (!$user) {
+            return new JsonResponse(['error' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $em->remove($user);
+        $em->flush();
+
+        return new JsonResponse([
+            'message' => 'Compte supprimé avec succès.'
+        ], Response::HTTP_OK);
     }
 }

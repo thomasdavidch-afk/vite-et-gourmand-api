@@ -48,9 +48,9 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $ville = null;
 
-    #[ORM\Column(name: 'pays', type: 'string', length: 50, nullable: true)]
+    #[ORM\Column(name: 'code_postal', type: 'string', length: 10, nullable: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
-    private ?string $pays = null;
+    private ?string $codePostal = null;
 
     #[ORM\Column(name: 'api_token', type: 'string', length: 255, unique: true, nullable: true)]
     #[Groups(['utilisateur:read'])]
@@ -168,14 +168,14 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getPays(): ?string
+    public function getCodePostal(): ?string
     {
-        return $this->pays;
+        return $this->codePostal;
     }
 
-    public function setPays(?string $pays): self
+    public function setCodePostal(?string $codePostal): self
     {
-        $this->pays = $pays;
+        $this->codePostal = $codePostal;
         return $this;
     }
 
