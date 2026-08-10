@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\CommandeRepository;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
 
@@ -23,14 +24,14 @@ class Commande
     #[ORM\Column(name: 'heure_livraison', type: 'string', length: 50, nullable: true)]
     private ?string $heureLivraison = null;
 
-    #[ORM\Column(name: 'prix_menu', type: 'float', nullable: true)]
-    private ?float $prixMenu = null;
+    #[ORM\Column(name: 'prix_menu', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $prixMenu = null;
 
     #[ORM\Column(name: 'nombre_personne', type: 'integer', nullable: true)]
     private ?int $nombrePersonne = null;
 
-    #[ORM\Column(name: 'prix_livraison', type: 'float', nullable: true)]
-    private ?float $prixLivraison = null;
+    #[ORM\Column(name: 'prix_livraison', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $prixLivraison = null;
 
     #[ORM\Column(name: 'statut', type: 'string', length: 50, nullable: true)]
     private ?string $statut = null;
@@ -45,7 +46,7 @@ class Commande
     #[ORM\JoinColumn(name: 'menu_id', referencedColumnName: 'menu_id', nullable: true)]
     private ?Menu $menu = null;
 
-    #[ORM\ManyToOne(targetEntity: Utilisateur::class)]
+    #[ORM\ManyToOne(targetEntity: Utilisateur::class, inversedBy: 'commandes')]
     #[ORM\JoinColumn(name: 'utilisateur_id', referencedColumnName: 'utilisateur_id', nullable: true)]
     private ?Utilisateur $utilisateur = null;
 
@@ -66,14 +67,14 @@ class Commande
     public function getHeureLivraison(): ?string { return $this->heureLivraison; }
     public function setHeureLivraison(?string $h): self { $this->heureLivraison = $h; return $this; }
 
-    public function getPrixMenu(): ?float { return $this->prixMenu; }
-    public function setPrixMenu(?float $p): self { $this->prixMenu = $p; return $this; }
+    public function getPrixMenu(): ?string { return $this->prixMenu; }
+    public function setPrixMenu(?string $p): self { $this->prixMenu = $p; return $this; }
 
     public function getNombrePersonne(): ?int { return $this->nombrePersonne; }
     public function setNombrePersonne(?int $n): self { $this->nombrePersonne = $n; return $this; }
 
-    public function getPrixLivraison(): ?float { return $this->prixLivraison; }
-    public function setPrixLivraison(?float $p): self { $this->prixLivraison = $p; return $this; }
+    public function getPrixLivraison(): ?string { return $this->prixLivraison; }
+    public function setPrixLivraison(?string $p): self { $this->prixLivraison = $p; return $this; }
 
     public function getStatut(): ?string { return $this->statut; }
     public function setStatut(?string $s): self { $this->statut = $s; return $this; }
@@ -89,4 +90,14 @@ class Commande
 
     public function getUtilisateur(): ?Utilisateur { return $this->utilisateur; }
     public function setUtilisateur(?Utilisateur $u): self { $this->utilisateur = $u; return $this; }
+
+    public function isPretMateriel(): ?bool
+    {
+        return $this->pretMateriel;
+    }
+
+    public function isRestitutionMateriel(): ?bool
+    {
+        return $this->restitutionMateriel;
+    }
 }

@@ -2,14 +2,15 @@
 
 namespace App\Entity;
 
+use App\Repository\UtilisateurRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
-use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Attribute\Groups;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: UtilisateurRepository::class)]
 #[ORM\Table(name: 'utilisateur')]
 class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 {
@@ -23,22 +24,25 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $email = null;
 
-    // Modifié à 255 caractères pour stocker le hash Symfony
     #[ORM\Column(name: 'password', type: 'string', length: 255)]
-    #[Groups(['utilisateur:write'])] // Jamais lu dans utilisateur:read !
+    #[Groups(['utilisateur:write'])]
     private ?string $password = null;
 
-    #[ORM\Column(name: 'api_token', type: 'string', length: 255, unique: true, nullable: true)]
-    #[Groups(['utilisateur:read'])]
-    private ?string $apiToken = null;
+    #[ORM\Column(name: 'nom', type: 'string', length: 50, nullable: true)]
+    #[Groups(['utilisateur:read', 'utilisateur:write'])]
+    private ?string $nom = null;
 
     #[ORM\Column(name: 'prenom', type: 'string', length: 50, nullable: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $prenom = null;
 
-    #[ORM\Column(name: 'telephone', type: 'string', length: 50, nullable: true)]
+    #[ORM\Column(name: 'telephone', type: 'string', length: 20, nullable: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $telephone = null;
+
+    #[ORM\Column(name: 'adresse_postale', type: 'string', length: 255, nullable: true)]
+    #[Groups(['utilisateur:read', 'utilisateur:write'])]
+    private ?string $adressePostale = null;
 
     #[ORM\Column(name: 'ville', type: 'string', length: 50, nullable: true)]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
@@ -48,9 +52,14 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
     private ?string $pays = null;
 
-    #[ORM\Column(name: 'adresse_postale', type: 'string', length: 50, nullable: true)]
+    #[ORM\Column(name: 'api_token', type: 'string', length: 255, unique: true, nullable: true)]
+    #[Groups(['utilisateur:read'])]
+    private ?string $apiToken = null;
+
+    // Permet de désactiver le compte d'un employé qui quitte l'entreprise
+    #[ORM\Column(name: 'is_active', type: 'boolean', options: ['default' => true])]
     #[Groups(['utilisateur:read', 'utilisateur:write'])]
-    private ?string $adressePostale = null;
+    private bool $isActive = true;
 
     #[ORM\ManyToMany(targetEntity: Role::class, inversedBy: 'utilisateurs')]
     #[ORM\JoinTable(
@@ -61,19 +70,20 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['utilisateur:read'])]
     private Collection $roleEntities;
 
-    #[ORM\ManyToMany(targetEntity: Avis::class, inversedBy: 'utilisateurs')]
-    #[ORM\JoinTable(
-        name: 'publie',
-        joinColumns: [new ORM\JoinColumn(name: 'utilisateur_id', referencedColumnName: 'utilisateur_id')],
-        inverseJoinColumns: [new ORM\JoinColumn(name: 'avis_id', referencedColumnName: 'avis_id')]
-    )]
+    // Un utilisateur peut publier plusieurs avis (OneToMany)
+    #[ORM\OneToMany(mappedBy: 'utilisateur', targetEntity: Avis::class)]
     #[Groups(['utilisateur:read'])]
     private Collection $avis;
+
+    // Un utilisateur peut passer plusieurs commandes (OneToMany)
+    #[ORM\OneToMany(mappedBy: 'utilisateur', targetEntity: Commande::class)]
+    private Collection $commandes;
 
     public function __construct()
     {
         $this->roleEntities = new ArrayCollection();
         $this->avis = new ArrayCollection();
+        $this->commandes = new ArrayCollection();
     }
 
     public function getUtilisateurId(): ?int
@@ -103,14 +113,14 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getApiToken(): ?string
+    public function getNom(): ?string
     {
-        return $this->apiToken;
+        return $this->nom;
     }
 
-    public function setApiToken(?string $apiToken): self
+    public function setNom(?string $nom): self
     {
-        $this->apiToken = $apiToken;
+        $this->nom = $nom;
         return $this;
     }
 
@@ -136,6 +146,17 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    public function getAdressePostale(): ?string
+    {
+        return $this->adressePostale;
+    }
+
+    public function setAdressePostale(?string $adressePostale): self
+    {
+        $this->adressePostale = $adressePostale;
+        return $this;
+    }
+
     public function getVille(): ?string
     {
         return $this->ville;
@@ -158,14 +179,25 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getAdressePostale(): ?string
+    public function getApiToken(): ?string
     {
-        return $this->adressePostale;
+        return $this->apiToken;
     }
 
-    public function setAdressePostale(?string $adressePostale): self
+    public function setApiToken(?string $apiToken): self
     {
-        $this->adressePostale = $adressePostale;
+        $this->apiToken = $apiToken;
+        return $this;
+    }
+
+    public function isIsActive(): bool
+    {
+        return $this->isActive;
+    }
+
+    public function setIsActive(bool $isActive): self
+    {
+        $this->isActive = $isActive;
         return $this;
     }
 
@@ -188,22 +220,57 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    /**
+     * @return Collection<int, Avis>
+     */
     public function getAvis(): Collection
     {
         return $this->avis;
     }
 
-    public function addAvi(Avis $avi): self
+    public function addAvis(Avis $avis): self
     {
-        if (!$this->avis->contains($avi)) {
-            $this->avis[] = $avi;
+        if (!$this->avis->contains($avis)) {
+            $this->avis[] = $avis;
+            $avis->setUtilisateur($this);
         }
         return $this;
     }
 
-    public function removeAvi(Avis $avi): self
+    public function removeAvis(Avis $avis): self
     {
-        $this->avis->removeElement($avi);
+        if ($this->avis->removeElement($avis)) {
+            if ($avis->getUtilisateur() === $this) {
+                $avis->setUtilisateur(null);
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Commande>
+     */
+    public function getCommandes(): Collection
+    {
+        return $this->commandes;
+    }
+
+    public function addCommande(Commande $commande): self
+    {
+        if (!$this->commandes->contains($commande)) {
+            $this->commandes[] = $commande;
+            $commande->setUtilisateur($this);
+        }
+        return $this;
+    }
+
+    public function removeCommande(Commande $commande): self
+    {
+        if ($this->commandes->removeElement($commande)) {
+            if ($commande->getUtilisateur() === $this) {
+                $commande->setUtilisateur(null);
+            }
+        }
         return $this;
     }
 
@@ -212,23 +279,17 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
         return (string) $this->email;
     }
 
-    /**
-     * Retourne la liste des rôles de l'utilisateur sous forme de tableau de chaînes.
-     * Garantit que ROLE_USER est toujours inclus et que les libellés sont au bon format.
-     */
     public function getRoles(): array
     {
         $roles = [];
         foreach ($this->roleEntities as $role) {
             $libelle = strtoupper((string) $role->getLibelle());
-            // Ajoute 'ROLE_' si ce n'est pas déjà présent dans votre table Role
             if (!str_starts_with($libelle, 'ROLE_')) {
                 $libelle = 'ROLE_' . $libelle;
             }
             $roles[] = $libelle;
         }
 
-        // Tout utilisateur a au moins ROLE_USER
         $roles[] = 'ROLE_USER';
 
         return array_unique($roles);
@@ -236,6 +297,48 @@ class Utilisateur implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function eraseCredentials(): void
     {
-        // Si vous stockez des données temporaires sensibles, effacez-les ici
+    }
+
+    public function isActive(): ?bool
+    {
+        return $this->isActive;
+    }
+
+    public function addRoleEntity(Role $roleEntity): static
+    {
+        if (!$this->roleEntities->contains($roleEntity)) {
+            $this->roleEntities->add($roleEntity);
+        }
+
+        return $this;
+    }
+
+    public function removeRoleEntity(Role $roleEntity): static
+    {
+        $this->roleEntities->removeElement($roleEntity);
+
+        return $this;
+    }
+
+    public function addAvi(Avis $avi): static
+    {
+        if (!$this->avis->contains($avi)) {
+            $this->avis->add($avi);
+            $avi->setUtilisateur($this);
+        }
+
+        return $this;
+    }
+
+    public function removeAvi(Avis $avi): static
+    {
+        if ($this->avis->removeElement($avi)) {
+            // set the owning side to null (unless already changed)
+            if ($avi->getUtilisateur() === $this) {
+                $avi->setUtilisateur(null);
+            }
+        }
+
+        return $this;
     }
 }

@@ -1,7 +1,7 @@
 nelmio_api_doc:
     documentation:
         info:
-            title: Mon API
+            title: Vite et Gourmand API
             description: Documentation des endpoints
             version: 1.0.0
         components:
@@ -13,5 +13,6 @@ nelmio_api_doc:
         security:
             - X-AUTH-TOKEN: []
     areas:
-        path_patterns:
+        default: # <--- Ne pas oublier la clé 'default:'
+            path_patterns:
             - ^/api

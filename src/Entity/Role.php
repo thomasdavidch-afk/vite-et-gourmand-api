@@ -19,7 +19,7 @@ class Role
     #[ORM\Column(name: 'libelle', type: 'string', length: 50, nullable: true)]
     private ?string $libelle = null;
 
-    #[ORM\ManyToMany(targetEntity: Utilisateur::class, mappedBy: 'roles')]
+    #[ORM\ManyToMany(targetEntity: Utilisateur::class, mappedBy: 'roleEntities')]
     private Collection $utilisateurs;
 
     public function __construct()

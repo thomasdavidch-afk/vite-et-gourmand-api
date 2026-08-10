@@ -10,12 +10,30 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route; 
 
 #[Route('/api', name: 'api_')]
 #[OA\Tag(name: 'Sécurité & Compte')]
 class SecurityController extends AbstractController
 {
+    /**
+     * Détermine le rôle principal en minuscule pour le front-end ('admin', 'employe', 'client')
+     */
+    private function determineMainRole(Utilisateur $user): string
+    {
+        $roles = $user->getRoles();
+
+        if (in_array('ROLE_ADMIN', $roles, true)) {
+            return 'admin';
+        }
+        
+        if (in_array('ROLE_EMPLOYE', $roles, true) || in_array('ROLE_EMPLOYEE', $roles, true)) {
+            return 'employe';
+        }
+
+        return 'client';
+    }
+
     /**
      * Inscription d'un nouvel utilisateur
      */
@@ -30,9 +48,10 @@ class SecurityController extends AbstractController
                 properties: [
                     new OA\Property(property: 'email', type: 'string', example: 'jean.dupont@example.com'),
                     new OA\Property(property: 'password', type: 'string', example: 'MotDePasse123!'),
+                    new OA\Property(property: 'nom', type: 'string', example: 'Dupont'),
                     new OA\Property(property: 'prenom', type: 'string', example: 'Jean'),
                     new OA\Property(property: 'telephone', type: 'string', example: '0612345678'),
-                    new OA\Property(property: 'ville', type: 'string', example: 'Paris'),
+                    new OA\Property(property: 'ville', type: 'string', example: 'Bordeaux'),
                     new OA\Property(property: 'pays', type: 'string', example: 'France'),
                     new OA\Property(property: 'adressePostale', type: 'string', example: '10 rue de la Paix')
                 ]
@@ -72,6 +91,7 @@ class SecurityController extends AbstractController
         $user->setPassword($hashedPassword);
 
         // Champs optionnels
+        if (isset($data['nom'])) $user->setNom($data['nom']);
         if (isset($data['prenom'])) $user->setPrenom($data['prenom']);
         if (isset($data['telephone'])) $user->setTelephone($data['telephone']);
         if (isset($data['ville'])) $user->setVille($data['ville']);
@@ -108,7 +128,8 @@ class SecurityController extends AbstractController
         responses: [
             new OA\Response(response: 200, description: 'Connexion réussie avec retour du token'),
             new OA\Response(response: 400, description: 'Email et mot de passe requis'),
-            new OA\Response(response: 401, description: 'Identifiants invalides')
+            new OA\Response(response: 401, description: 'Identifiants invalides'),
+            new OA\Response(response: 403, description: 'Compte désactivé')
         ]
     )]
     public function login(
@@ -125,10 +146,16 @@ class SecurityController extends AbstractController
             return new JsonResponse(['error' => 'Email et mot de passe requis.'], Response::HTTP_BAD_REQUEST);
         }
 
+        /** @var Utilisateur|null $user */
         $user = $em->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
 
         if (!$user || !$passwordHasher->isPasswordValid($user, $password)) {
             return new JsonResponse(['error' => 'Identifiants invalides.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // Vérification si le compte est actif
+        if (!$user->isIsActive()) {
+            return new JsonResponse(['error' => 'Votre compte a été désactivé.'], Response::HTTP_FORBIDDEN);
         }
 
         // Génération d'un token aléatoire de 64 caractères
@@ -140,7 +167,9 @@ class SecurityController extends AbstractController
             'token' => $token,
             'utilisateurId' => $user->getUtilisateurId(),
             'email' => $user->getEmail(),
+            'nom' => $user->getNom(),
             'prenom' => $user->getPrenom(),
+            'role' => $this->determineMainRole($user), // 👈 Renvoie 'admin', 'employe' ou 'client'
             'roles' => $user->getRoles()
         ]);
     }
@@ -152,13 +181,12 @@ class SecurityController extends AbstractController
     #[OA\Get(
         path: '/api/account/me',
         summary: 'Récupérer les informations de l\'utilisateur connecté',
-        security: [['ApiKeyAuth' => []]],
         responses: [
             new OA\Response(response: 200, description: 'Informations de l\'utilisateur'),
             new OA\Response(response: 401, description: 'Utilisateur non authentifié')
         ]
     )]
-    #[OA\Security(name: 'X-AUTH-TOKEN')] // <--- Indique à Swagger le cadenas de sécurité
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
     public function me(): JsonResponse
     {
         /** @var Utilisateur|null $user */
@@ -171,11 +199,14 @@ class SecurityController extends AbstractController
         return new JsonResponse([
             'utilisateurId' => $user->getUtilisateurId(),
             'email' => $user->getEmail(),
+            'nom' => $user->getNom(),
             'prenom' => $user->getPrenom(),
             'telephone' => $user->getTelephone(),
             'ville' => $user->getVille(),
             'pays' => $user->getPays(),
             'adressePostale' => $user->getAdressePostale(),
+            'isActive' => $user->isIsActive(),
+            'role' => $this->determineMainRole($user), // 👈 Renvoie 'admin', 'employe' ou 'client'
             'roles' => $user->getRoles()
         ]);
     }
@@ -187,12 +218,12 @@ class SecurityController extends AbstractController
     #[OA\Put(
         path: '/api/account/edit',
         summary: 'Modifier les informations du compte de l\'utilisateur connecté',
-        security: [['ApiKeyAuth' => []]],
         requestBody: new OA\RequestBody(
             content: new OA\JsonContent(
                 properties: [
                     new OA\Property(property: 'email', type: 'string', example: 'nouveau.email@example.com'),
                     new OA\Property(property: 'password', type: 'string', example: 'NouveauMotDePasse123!'),
+                    new OA\Property(property: 'nom', type: 'string', example: 'DupontModifie'),
                     new OA\Property(property: 'prenom', type: 'string', example: 'JeanModifie'),
                     new OA\Property(property: 'telephone', type: 'string', example: '0698765432'),
                     new OA\Property(property: 'ville', type: 'string', example: 'Lyon'),
@@ -207,7 +238,7 @@ class SecurityController extends AbstractController
             new OA\Response(response: 409, description: 'Cet email est déjà utilisé')
         ]
     )]
-    #[OA\Security(name: 'X-AUTH-TOKEN')] // <--- Indique à Swagger le cadenas de sécurité
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
     public function edit(
         Request $request,
         EntityManagerInterface $em,
@@ -220,7 +251,7 @@ class SecurityController extends AbstractController
             return new JsonResponse(['error' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
+        $data = json_decode($request->getContent(), true) ?? [];
 
         // Modification optionnelle de l'email
         if (isset($data['email']) && $data['email'] !== $user->getEmail()) {
@@ -237,6 +268,7 @@ class SecurityController extends AbstractController
         }
 
         // Modification des autres champs personnels
+        if (array_key_exists('nom', $data)) $user->setNom($data['nom']);
         if (array_key_exists('prenom', $data)) $user->setPrenom($data['prenom']);
         if (array_key_exists('telephone', $data)) $user->setTelephone($data['telephone']);
         if (array_key_exists('ville', $data)) $user->setVille($data['ville']);
@@ -250,6 +282,7 @@ class SecurityController extends AbstractController
             'user' => [
                 'utilisateurId' => $user->getUtilisateurId(),
                 'email' => $user->getEmail(),
+                'nom' => $user->getNom(),
                 'prenom' => $user->getPrenom(),
                 'telephone' => $user->getTelephone(),
                 'ville' => $user->getVille(),
