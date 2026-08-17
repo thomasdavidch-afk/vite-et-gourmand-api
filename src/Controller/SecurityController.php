@@ -90,6 +90,12 @@ class SecurityController extends AbstractController
         $hashedPassword = $passwordHasher->hashPassword($user, $password);
         $user->setPassword($hashedPassword);
 
+        if (method_exists($user, 'setIsActive')) {
+            $user->setIsActive(true);
+        } elseif (method_exists($user, 'setIsactive')) {
+            $user->setIsactive(true);
+        }
+
         // Champs optionnels
         if (isset($data['nom'])) $user->setNom($data['nom']);
         if (isset($data['prenom'])) $user->setPrenom($data['prenom']);
@@ -335,5 +341,140 @@ class SecurityController extends AbstractController
         return new JsonResponse([
             'message' => 'Compte supprimé avec succès.'
         ], Response::HTTP_OK);
+    }
+
+    /**
+     * Liste des employés (Pour l'administrateur)
+     */
+    #[Route('/admin/employes', name: 'admin_list_employes', methods: ['GET'])]
+    #[OA\Get(path: '/api/admin/employes', summary: 'Liste tous les comptes employés')]
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
+    public function listEmployes(EntityManagerInterface $em): JsonResponse
+    {
+        /** @var Utilisateur|null $currentUser */
+        $currentUser = $this->getUser();
+        if (!$currentUser || $this->determineMainRole($currentUser) !== 'admin') {
+            return new JsonResponse(['error' => 'Accès refusé. Rôle Administrateur requis.'], Response::HTTP_FORBIDDEN);
+        }
+
+        // Récupérer les utilisateurs ayant le rôle employé
+        $allUsers = $em->getRepository(Utilisateur::class)->findAll();
+        $employes = array_filter($allUsers, function(Utilisateur $u) {
+            $roles = $u->getRoles();
+            return in_array('ROLE_EMPLOYE', $roles, true) || in_array('ROLE_EMPLOYEE', $roles, true);
+        });
+
+        $data = array_map(function(Utilisateur $u) {
+            return [
+                'utilisateurId' => $u->getUtilisateurId(),
+                'email' => $u->getEmail(),
+                'nom' => $u->getNom(),
+                'prenom' => $u->getPrenom(),
+                'roles' => $u->getRoles(),
+                'isActive' => $u->isIsActive()
+            ];
+        }, array_values($employes));
+
+        return new JsonResponse($data, Response::HTTP_OK);
+    }
+
+    /**
+     * Créer un compte employé (Pour l'administrateur)
+     */
+    #[Route('/admin/employes', name: 'admin_create_employe', methods: ['POST'])]
+    #[OA\Post(path: '/api/admin/employes', summary: 'Créer un compte employé')]
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
+    public function createEmploye(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $passwordHasher
+    ): JsonResponse {
+        try {
+            /** @var Utilisateur|null $currentUser */
+            $currentUser = $this->getUser();
+            if (!$currentUser || $this->determineMainRole($currentUser) !== 'admin') {
+                return new JsonResponse(['error' => 'Accès refusé. Rôle Administrateur requis.'], Response::HTTP_FORBIDDEN);
+            }
+
+            $data = json_decode($request->getContent(), true) ?? [];
+            $email = $data['email'] ?? null;
+            $password = $data['password'] ?? null;
+
+            if (!$email || !$password) {
+                return new JsonResponse(['error' => 'Email et mot de passe requis.'], Response::HTTP_BAD_REQUEST);
+            }
+
+            $existingUser = $em->getRepository(Utilisateur::class)->findOneBy(['email' => $email]);
+            if ($existingUser) {
+                return new JsonResponse(['error' => 'Un compte existe déjà avec cet email.'], Response::HTTP_CONFLICT);
+            }
+
+            $employe = new Utilisateur();
+            $employe->setEmail($email);
+            $employe->setPassword($passwordHasher->hashPassword($employe, $password));
+            $employe->setIsActive(true);
+
+            if (!empty($data['nom'])) {
+                $employe->setNom($data['nom']);
+            }
+            if (!empty($data['prenom'])) {
+                $employe->setPrenom($data['prenom']);
+            }
+
+            // --- RECHERCHE ET AFFECTATION DU RÔLE EMPLOYÉ ---
+            // On cherche le rôle 'employe' ou 'ROLE_EMPLOYE' dans la table Role
+            $roleRepository = $em->getRepository(\App\Entity\Role::class);
+            $roleEmploye = $roleRepository->findOneBy(['libelle' => 'employe']) 
+                        ?? $roleRepository->findOneBy(['libelle' => 'ROLE_EMPLOYE']);
+
+            if ($roleEmploye) {
+                $employe->addRole($roleEmploye);
+            }
+
+            $em->persist($employe);
+            $em->flush();
+
+            return new JsonResponse([
+                'message' => 'Compte employé créé avec succès.',
+                'utilisateurId' => $employe->getUtilisateurId(),
+                'email' => $employe->getEmail()
+            ], Response::HTTP_CREATED);
+
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'error' => 'Erreur création employé : ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Supprimer un compte employé (Pour l'administrateur)
+     */
+    #[Route('/admin/employes/{id}', name: 'admin_delete_employe', methods: ['DELETE'])]
+    #[OA\Delete(path: '/api/admin/employes/{id}', summary: 'Supprimer un compte employé')]
+    #[OA\Security(name: 'X-AUTH-TOKEN')]
+    public function deleteEmploye(int $id, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            /** @var Utilisateur|null $currentUser */
+            $currentUser = $this->getUser();
+            if (!$currentUser || $this->determineMainRole($currentUser) !== 'admin') {
+                return new JsonResponse(['error' => 'Accès refusé. Rôle Administrateur requis.'], Response::HTTP_FORBIDDEN);
+            }
+
+            $employe = $em->getRepository(Utilisateur::class)->find($id);
+            if (!$employe) {
+                return new JsonResponse(['error' => 'Employé non trouvé.'], Response::HTTP_NOT_FOUND);
+            }
+
+            $em->remove($employe);
+            $em->flush();
+
+            return new JsonResponse(['message' => 'Compte employé supprimé avec succès.'], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'error' => 'Erreur lors de la suppression de l\'employé : ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }

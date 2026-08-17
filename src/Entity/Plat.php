@@ -22,6 +22,10 @@ class Plat
     #[Groups(['menu:read', 'plat:read', 'plat:write'])]
     private ?string $titrePlat = null;
 
+    #[ORM\Column(name: 'type', type: 'string', length: 50, nullable: true)]
+    #[Groups(['menu:read', 'plat:read', 'plat:write'])]
+    private ?string $type = null;
+
     #[ORM\Column(name: 'photo', type: 'string', length: 255, nullable: true)]
     #[Groups(['menu:read', 'plat:read', 'plat:write'])]
     private ?string $photo = null;
@@ -60,6 +64,17 @@ class Plat
         return $this;
     }
 
+    public function getType(): ?string
+    {
+        return $this->type;
+    }
+
+    public function setType(?string $type): self
+    {
+        $this->type = $type;
+        return $this;
+    }
+
     public function getPhoto(): ?string
     {
         return $this->photo;
@@ -89,7 +104,6 @@ class Plat
         $this->allergenes->removeElement($allergene);
         return $this;
     }
-
 
     public function getMenus(): Collection
     {
