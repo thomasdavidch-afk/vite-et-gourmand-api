@@ -2,52 +2,82 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
 use App\Repository\CommandeRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: CommandeRepository::class)]
 #[ORM\Table(name: 'commande')]
+#[ApiResource(
+    operations: [
+        new GetCollection(),
+        new Get(),
+        new Post(),
+        new Patch(),
+        new Delete()
+    ],
+    normalizationContext: ['groups' => ['commande:read']],
+    denormalizationContext: ['groups' => ['commande:write']]
+)]
 class Commande
 {
     #[ORM\Id]
     #[ORM\Column(name: 'numero_commande', type: 'string', length: 50)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?string $numeroCommande = null;
 
     #[ORM\Column(name: 'date_commande', type: 'date', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?\DateTimeInterface $dateCommande = null;
 
     #[ORM\Column(name: 'date_prestation', type: 'date', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?\DateTimeInterface $datePrestation = null;
 
     #[ORM\Column(name: 'heure_livraison', type: 'string', length: 50, nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?string $heureLivraison = null;
 
     #[ORM\Column(name: 'prix_menu', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?string $prixMenu = null;
 
     #[ORM\Column(name: 'nombre_personne', type: 'integer', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?int $nombrePersonne = null;
 
     #[ORM\Column(name: 'prix_livraison', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?string $prixLivraison = null;
 
     #[ORM\Column(name: 'statut', type: 'string', length: 50, nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?string $statut = null;
 
     #[ORM\Column(name: 'pret_materiel', type: 'boolean', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?bool $pretMateriel = null;
 
     #[ORM\Column(name: 'restitution_materiel', type: 'boolean', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?bool $restitutionMateriel = null;
 
     #[ORM\ManyToOne(targetEntity: Menu::class)]
     #[ORM\JoinColumn(name: 'menu_id', referencedColumnName: 'menu_id', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?Menu $menu = null;
 
     #[ORM\ManyToOne(targetEntity: Utilisateur::class, inversedBy: 'commandes')]
     #[ORM\JoinColumn(name: 'utilisateur_id', referencedColumnName: 'utilisateur_id', nullable: true)]
+    #[Groups(['commande:read', 'commande:write'])]
     private ?Utilisateur $utilisateur = null;
 
     public function __construct()

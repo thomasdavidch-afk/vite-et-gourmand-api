@@ -15,11 +15,81 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/commandes', name: 'api_commandes_')]
 class CommandeController extends AbstractController
 {
+    /**
+     * Helper pour récupérer l'utilisateur (Security ou X-AUTH-TOKEN)
+     */
+    private function getUserFromRequest(Request $request, UtilisateurRepository $utilisateurRepository): ?Utilisateur
+    {
+        /** @var Utilisateur|null $user */
+        $user = $this->getUser();
+
+        if (!$user) {
+            $apiToken = $request->headers->get('X-AUTH-TOKEN');
+            if ($apiToken) {
+                $user = $utilisateurRepository->findOneBy(['apiToken' => $apiToken]);
+            }
+        }
+
+        return $user;
+    }
+
+    /**
+     * GET /api/commandes
+     * Récupère la liste des commandes du client connecté
+     */
+    #[Route('', name: 'list', methods: ['GET'], format: 'json')]
+    public function list(
+        Request $request,
+        CommandeRepository $commandeRepository,
+        UtilisateurRepository $utilisateurRepository
+    ): JsonResponse {
+        $user = $this->getUserFromRequest($request, $utilisateurRepository);
+
+        if (!$user) {
+            return new JsonResponse(['error' => 'Utilisateur non authentifié'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // Récupérer les commandes du client (triées par date décroissante)
+        $commandes = $commandeRepository->findBy(
+            ['utilisateur' => $user],
+            ['dateCommande' => 'DESC']
+        );
+
+        $data = [];
+        foreach ($commandes as $commande) {
+            $menu = $commande->getMenu();
+
+            $data[] = [
+                'id' => $commande->getNumeroCommande(),
+                'numeroCommande' => $commande->getNumeroCommande(),
+                'dateCommande' => $commande->getDateCommande()?->format('Y-m-d'),
+                'datePrestation' => $commande->getDatePrestation()?->format('Y-m-d'),
+                'heureLivraison' => $commande->getHeureLivraison(),
+                'nombrePersonne' => $commande->getNombrePersonne(),
+                'prixMenu' => $commande->getPrixMenu(),
+                'prixLivraison' => $commande->getPrixLivraison(),
+                'statut' => $commande->getStatut(),
+                'pretMateriel' => $commande->getPretMateriel(),
+                'restitutionMateriel' => $commande->getRestitutionMateriel(),
+                'utilisateur' => [
+                    'utilisateurId' => $user->getUtilisateurId() ?? $user->getId(),
+                    'email' => $user->getEmail()
+                ],
+                'menu' => $menu ? [
+                    'menuId' => $menu->getMenuId(),
+                    'titre' => $menu->getTitre(),
+                ] : null
+            ];
+        }
+
+        return new JsonResponse($data, Response::HTTP_OK);
+    }
+
     /**
      * POST /api/commandes
      * Crée la commande, applique les règles tarifaires et envoie le mail de confirmation
@@ -77,15 +147,14 @@ class CommandeController extends AbstractController
         // 3. Calcul des frais de livraison (RÈGLE MÉTIER : 5€ + 0.59€/km si hors Bordeaux)
         $ville = strtolower(trim($data['ville'] ?? 'bordeaux'));
         $distanceKm = (float)($data['distanceKm'] ?? 0);
-        
+
         $prixLivraison = 0.00;
         if ($ville !== 'bordeaux') {
             $prixLivraison = 5.00 + (0.59 * $distanceKm);
         }
 
         // 4. Gestion de l'Utilisateur
-        /** @var Utilisateur|null $user */
-        $user = $this->getUser();
+        $user = $this->getUserFromRequest($request, $utilisateurRepository);
         $emailClient = $data['email'] ?? ($user ? $user->getEmail() : null);
 
         if (!$user && $emailClient) {
@@ -132,7 +201,7 @@ class CommandeController extends AbstractController
         // 6. RÈGLE MÉTIER : Envoi de l'email de confirmation
         if ($emailClient) {
             $totalCommande = $prixTotalMenu + $prixLivraison;
-            
+
             $emailContent = sprintf(
                 "Bonjour,\n\nMerci pour votre commande n° %s !\n\n".
                 "Détails de la prestation :\n".
@@ -173,5 +242,31 @@ class CommandeController extends AbstractController
             'prixLivraison' => number_format($prixLivraison, 2),
             'statut' => $commande->getStatut()
         ], Response::HTTP_CREATED);
+    }
+
+    /**
+     * PATCH /api/commandes/{numeroCommande}
+     * Permet la modification / annulation d'une commande
+     */
+    #[Route('/{numeroCommande}', name: 'cancel', methods: ['PATCH'])]
+    public function cancel(
+        string $numeroCommande,
+        Request $request,
+        CommandeRepository $commandeRepository,
+        EntityManagerInterface $em
+    ): JsonResponse {
+        $commande = $commandeRepository->findOneBy(['numeroCommande' => $numeroCommande]);
+
+        if (!$commande) {
+            return new JsonResponse(['error' => 'Commande introuvable'], Response::HTTP_NOT_FOUND);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (isset($data['statut'])) {
+            $commande->setStatut($data['statut']);
+            $em->flush();
+        }
+
+        return new JsonResponse(['message' => 'Statut mis à jour avec succès'], Response::HTTP_OK);
     }
 }
