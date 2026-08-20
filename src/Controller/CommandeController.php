@@ -17,7 +17,7 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/api/commandes', name: 'api_commandes_')]
+#[Route('/api/mes-commandes', name: 'api_mes_commandes_')]
 class CommandeController extends AbstractController
 {
     /**
@@ -50,11 +50,14 @@ class CommandeController extends AbstractController
     ): JsonResponse {
         $user = $this->getUserFromRequest($request, $utilisateurRepository);
 
+        // S'assurer strict que l'utilisateur existe
         if (!$user) {
-            return new JsonResponse(['error' => 'Utilisateur non authentifié'], Response::HTTP_UNAUTHORIZED);
+            return new JsonResponse([
+                'error' => 'Utilisateur non authentifié'
+            ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Récupérer les commandes du client (triées par date décroissante)
+        // Récupérer UNIQUEMENT les commandes liées à cet utilisateur précis
         $commandes = $commandeRepository->findBy(
             ['utilisateur' => $user],
             ['dateCommande' => 'DESC']
@@ -63,6 +66,7 @@ class CommandeController extends AbstractController
         $data = [];
         foreach ($commandes as $commande) {
             $menu = $commande->getMenu();
+            $cmdUser = $commande->getUtilisateur();
 
             $data[] = [
                 'id' => $commande->getNumeroCommande(),
@@ -77,8 +81,8 @@ class CommandeController extends AbstractController
                 'pretMateriel' => $commande->getPretMateriel(),
                 'restitutionMateriel' => $commande->getRestitutionMateriel(),
                 'utilisateur' => [
-                    'utilisateurId' => $user->getUtilisateurId() ?? $user->getId(),
-                    'email' => $user->getEmail()
+                    'utilisateurId' => $cmdUser ? ($cmdUser->getUtilisateurId() ?? $cmdUser->getId()) : null,
+                    'email' => $cmdUser ? $cmdUser->getEmail() : null
                 ],
                 'menu' => $menu ? [
                     'menuId' => $menu->getMenuId(),
